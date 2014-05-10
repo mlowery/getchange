@@ -17,13 +17,14 @@ A "change-ish" is any of the following:
     * https://review.openstack.org/123
 
 The cherry-picks will occur on a new branch updated with the commits of the
-appropriate branch.
+appropriate branch. Any changes will be stashed. Any branch with the same name
+will be renamed.
 
 ## Installation
 
 1. Clone this repo
 1. Optionally, add the clone directory to your `PATH`.
-2. Add this block to your ~/.ssh/config:
+2. Add this block to your `~/.ssh/config`:
 
 ```
 Host review

@@ -78,7 +78,6 @@ def get_gerrit_json(changeish):
            '--format JSON'
            % changeish)
     #print(cmd)
-    # shell is necessary to use PATH
     # last line of output is a "stats" line; ignore it
     lines = check_output(cmd).splitlines()
     if len(lines) == 1:
@@ -107,11 +106,14 @@ def get_changes(change, changes):
 
 
 def check_output(cmd):
+    # shell is necessary to use PATH
     return subprocess.check_output(cmd, shell=True)
 
 
 def check_call(cmd):
+    # hide output
     fnull = open(os.devnull, 'w')
+    # shell is necessary to use PATH
     subprocess.check_call(cmd,
                           stdout=fnull,
                           stderr=subprocess.STDOUT,
@@ -143,7 +145,7 @@ def setup_git_branch(changes):
     cmd = 'git checkout -b %(branch_name)s %(start_point)s' % locals()
     check_call(cmd)
     print('INFO: Pulling in latest from %(start_point)s' % locals())
-    cmd = 'git pullx --ff-only'
+    cmd = 'git pull --ff-only'
     check_call(cmd)
 
     # sanity check (make sure we're in the right project)
