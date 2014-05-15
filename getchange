@@ -1,186 +1,293 @@
+#!/usr/bin/python
+
 __author__ = 'mlowery'
 
 import argparse
+import ConfigParser
 from datetime import datetime
 import json
+import logging
 import os
 import re
 import subprocess
 import sys
 
+logging.basicConfig(level=logging.DEBUG, format='%(levelname)-5s %(message)s')
+
 
 def make_parser():
-    description = """Cherry-pick Gerrit change (including dependencies) on a
-new branch given only a "change-ish". A changeish is any of the following:
-* Commit hash
+    description = """
+Download Gerrit change (including dependencies) on a new branch given only a
+"change-ish". A changeish is any of the following:
+
+* Gerrit number
 * Gerrit Change-Id
     * Either 41-character ID, or
     * "Change-Id: xyz" (Copy to Clipboard button in Gerrit)
-* Gerrit number
 * URL (two styles)
     * https://review.openstack.org/#/c/123/
     * https://review.openstack.org/123
     """
-    parser = argparse.ArgumentParser(description=description,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter
-                                     )
+    parser = argparse.ArgumentParser(
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    subparsers = parser.add_subparsers(
+        title='subcommands',
+        help='add -h or --help after subcommand to see usage')
+    parser_test = subparsers.add_parser('test')
+    parser_test.set_defaults(func=test)
+    parser_test.add_argument(
+        'changeish',
+        metavar='<changeish>',
+        help='Change-Id, Gerrit number, or URL of some sort')
 
-    parser.add_argument('-c', '--change',
-                        metavar='<change-ish>',
-                        required=True,
-                        help='Change-Id, Gerrit number, or URL of some sort')
+    parser_edit = subparsers.add_parser('edit')
+    parser_edit.set_defaults(func=edit)
+    parser_edit.add_argument(
+        'changeish',
+        metavar='<changeish>',
+        help='Change-Id, Gerrit number, or URL of some sort')
     return parser
 
 
 def err(msg):
-    print(msg)
+    logging.error(msg)
     sys.exit(1)
 
 
-def parse_change_arg(change_arg):
+def parse_changeish(changeish):
     # Gerrit "number"
-    m = re.search(r'^(\d+)$', change_arg)
+    m = re.search(r'^(\d+)$', changeish)
     if m:
         return m.group(1)
 
     # Gerrit Change-Id
-    m = re.search(r'^(I[0-9a-f]{40})$', change_arg)
-    if m:
-        return m.group(1)
-
-    # git hash
-    m = re.search(r'^([0-9a-f]{40})$', change_arg)
+    m = re.search(r'^(I[0-9a-f]{40})$', changeish)
     if m:
         return m.group(1)
 
     # Copy to Clipboard button result
-    m = re.search(r'^Change-Id: (I[0-9a-f]{40})$', change_arg)
+    m = re.search(r'^Change-Id: (I[0-9a-f]{40})$', changeish)
     if m:
         return m.group(1)
 
     # URL
-    m = re.search(r'^https?://[^/]+/#/c/(\d+)/?[\d]*$', change_arg)
+    m = re.search(r'^https?://[^/]+/#/c/(\d+)/?$', changeish)
     if m:
         return m.group(1)
 
     # Copy URL button result
-    m = re.search(r'^https?://[^/]+/(\d+)/?[\d]*$', change_arg)
+    m = re.search(r'^https?://[^/]+/(\d+)/?$', changeish)
     if m:
         return m.group(1)
 
-    return None
+    err('Could not parse change "%s"' % changeish)
+
+
+def get_config():
+    config_parser = ConfigParser.ConfigParser()
+    config_parser.read('./.gitreview')
+    host = config_parser.get('gerrit', 'host')
+    port = config_parser.get('gerrit', 'port')
+
+    username = os.getenv("USERNAME")
+    if not username:
+        username = check_output('git config --get gitreview.username')
+    if not username:
+        username = os.getenv("USER")
+    return username, host, port
 
 
 def get_gerrit_json(changeish):
-    cmd = ('ssh review gerrit '
+    (username, host, port) = get_config()
+
+    cmd = ('ssh -p %s %s@%s gerrit '
            'query "%s" '
            '--current-patch-set '
            '--format JSON'
-           % changeish)
+           % (port, username, host, changeish))
     #print(cmd)
-    # last line of output is a "stats" line; ignore it
     lines = check_output(cmd).splitlines()
+    # when there is only one line, we've reached the end of the dependencies
     if len(lines) == 1:
         return None
+    # last line of output is a "stats" line; ignore it
     stdout = lines[0]
     #print(stdout)
     return json.loads(stdout)
 
 
-def make_cherry_pick_cmd(change_json):
-    project = change_json['project']
-    ref = change_json['currentPatchSet']['ref']
-    proto_and_host = re.search(r'(.*)/.*', change_json['url']).group(1)
-    return ('git fetch %(proto_and_host)s/%(project)s %(ref)s && '
-            'git cherry-pick FETCH_HEAD' % locals())
+def get_parent(change):
+    if len(change['currentPatchSet']['parents']) > 1:
+        raise NotImplementedError('cannot handle multiple parents')
+    return change['currentPatchSet']['parents'][0]
 
 
-def get_changes(change, changes):
-    j = get_gerrit_json(change)
-    if not j:
-        return
-    changes.insert(0, j)
-    parents = (j['currentPatchSet']['parents'])
-    for parent in parents:
-        get_changes(parent, changes)
+def get_latest_rev(change):
+    return change['currentPatchSet']['revision']
 
 
-def check_output(cmd):
+def get_number(change):
+    return change['number']
+
+
+def get_parent_commits(changes):
+    return [get_parent(change) for change in changes]
+
+
+def get_branch(change):
+    return change['branch']
+
+
+def get_latest_revs(changes):
+    revs = []
+    check_call('git fetch gerrit %s' % get_branch(changes[0]))
+    revs.append((get_branch(changes[0]),
+                 check_output('git rev-parse FETCH_HEAD')))
+    for i in xrange(len(changes) - 1):
+        revs.append((get_number(changes[i]), (get_latest_rev(changes[i]))))
+    return revs
+
+
+def is_up_to_date(changes):
+    parent_commits = get_parent_commits(changes)
+    latest_revs = get_latest_revs(changes)
+    logging.debug('commits=%s, revs=%s' % (parent_commits, latest_revs))
+    return parent_commits == latest_revs
+
+
+def get_changes(changeish, changes):
+    change = get_gerrit_json(changeish)
+    if not change:
+        return None
+    changes.insert(0, change)
+    parent = get_parent(change)
+    get_changes(parent, changes)
+
+
+def short_rev(commit):
+    return check_output('git rev-parse %s' % commit)
+
+
+def check_output(cmd, strip=True):
     # shell is necessary to use PATH
-    return subprocess.check_output(cmd, shell=True)
+    out = subprocess.check_output(cmd, shell=True)
+    if strip:
+        return out.strip()
+    else:
+        return out
 
 
-def check_call(cmd):
-    # hide output
-    fnull = open(os.devnull, 'w')
-    # shell is necessary to use PATH
-    subprocess.check_call(cmd,
-                          stdout=fnull,
-                          stderr=subprocess.STDOUT,
-                          shell=True)
+def check_call(cmd, quiet=True):
+    if quiet:
+        # hide output
+        fnull = open(os.devnull, 'w')
+        # shell is necessary to use PATH
+        subprocess.check_call(cmd,
+                              stdout=fnull,
+                              stderr=subprocess.STDOUT,
+                              shell=True)
+    else:
+        subprocess.check_call(cmd,
+                              shell=True)
 
 
-def setup_git_branch(changes):
-    change_json = changes[-1]
-    cmd = 'git stash save -u stash_by_%s' % os.path.basename(__file__)
-    check_call(cmd)
+def reset():
+    assert_git_repo()
+    check_call('git stash save -u stash_by_%s' % os.path.basename(__file__))
+    check_call('git reset --hard HEAD')
 
-    start_point = 'origin/%s' % change_json['branch']
-    branch_name = '%s_%s/%s' % (os.path.basename(__file__),
-                                change_json['number'],
-                                change_json['currentPatchSet']['number'])
-    cmd = 'git branch -v'
-    out = check_output(cmd)
-    if re.search(r'^\*?[\s]+%(branch_name)s[\s]+' % locals(),
-                 out,
+
+def assert_git_repo():
+    if not os.path.exists('./.git'):
+        err('"%s" is not a git repo' % os.getcwd())
+
+
+def test(args):
+    changeish = parse_changeish(args.changeish)
+    changes = []
+    get_changes(changeish, changes)
+    change = changes[-1]
+    perform_checks(changes)
+    reset()
+    remote_branch = change['branch']
+    ref = change['currentPatchSet']['ref']
+    branch = 'test_%s_%s/%s' % (re.sub('\W+', '_',
+                                   change['subject'][:40].strip()).lower(),
+                            change['number'],
+                            change['currentPatchSet']['number'])
+    backup_branch(branch)
+    check_call('git fetch gerrit %(ref)s && '
+               'git checkout FETCH_HEAD && '
+               'git checkout -b %(branch)s && '
+               'git fetch gerrit %(remote_branch)s' % locals())
+    check_call('git rebase FETCH_HEAD', quiet=False)
+
+
+def edit(args):
+    changeish = parse_changeish(args.changeish)
+    changes = []
+    get_changes(changeish, changes)
+    change = changes[-1]
+    perform_checks(changes)
+    parent_is_merged = len(changes) == 1
+    reset()
+    ref = change['currentPatchSet']['ref']
+    branch = change['topic']
+    backup_branch(branch)
+    if parent_is_merged:
+        parent_ref = change['branch']
+    else:
+        parent_ref = changes[-2]['currentPatchSet']['ref']
+    try:
+        check_call('git fetch gerrit %(parent_ref)s && '
+                   'git checkout FETCH_HEAD && '
+                   'git checkout -b %(branch)s && '
+                   'git fetch gerrit %(ref)s' % locals())
+        check_call('git cherry-pick FETCH_HEAD', quiet=False)
+    except subprocess.CalledProcessError as e:
+        print(e.output)
+
+
+def backup_branch(branch):
+    out = check_output('git branch -v', strip=False)
+    if re.search(r'^\*?[\s]+%(branch)s[\s]+' % locals(), out,
                  flags=re.MULTILINE):
         date = datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-        print('INFO: Backing up existing branch "%(branch_name)s"' %
-              locals())
-        cmd = ('git branch -m %(branch_name)s %(branch_name)s_%(date)s' %
+        logging.info('Backing up existing branch "%(branch)s"' %
+                     locals())
+        cmd = ('git branch -m %(branch)s %(branch)s_%(date)s' %
                locals())
         check_output(cmd)
 
-    print('INFO: Creating branch "%(branch_name)s"' % locals())
-    cmd = 'git checkout -b %(branch_name)s %(start_point)s' % locals()
-    check_call(cmd)
-    print('INFO: Pulling in latest from %(start_point)s' % locals())
-    cmd = 'git pull --ff-only'
-    check_call(cmd)
 
-    # sanity check (make sure we're in the right project)
-    merged_commit = changes[0]['currentPatchSet']['parents'][0]
-    cmd = 'git merge-base --is-ancestor %(merged_commit)s HEAD' % locals()
-    try:
-        check_call(cmd)
-    except subprocess.CalledProcessError as e:
-        #print(e.cmd)
-        err('ERROR: Parent commit of first change is not ancestor of HEAD')
+def perform_checks(changes):
+    """
+    for each change revision in chain, check to see if it is up-to-date (i.e.
+    see if its parent has advanced)
+    issue warnings for each mismatch
+    1. get latest on branch
+    2. check first change in dep chain
+    3.
+    """
+    # TODO change this to not check master mismatch
+    #print(is_up_to_date(changes))
+    # TODO check Jenkins and reddwarf passed on all dependencies
+
+    # TODO move these checks into pre-action hook for git-review
+    #check branch (topic naming convention)
+    #check for Implements or Closes-Bug
+    #check for submit on old dependency
+    #check for submit on old master (does git review prevent this?)
+    #runs pep8
+    #colored output
+    pass
 
 
 def main():
-    try:
-        args = make_parser().parse_args()
-        #print(args.change)
-
-        if not os.path.exists('./.git'):
-            err('ERROR: "%s" is not a git repo' % os.getcwd())
-
-        change = parse_change_arg(args.change)
-        if not change:
-            err('ERROR: Could not parse change "%s"' % args.change)
-        #print('change=%s' % change)
-
-        changes = []
-        get_changes(change, changes)
-        #print(changes)
-        setup_git_branch(changes)
-
-        for c in changes:
-            subprocess.check_call(make_cherry_pick_cmd(c), shell=True)
-    except subprocess.CalledProcessError as e:
-        err('ERROR: The following command failed:\n    %s' % e.cmd)
-        #print(e.output)
+    args = make_parser().parse_args()
+    args.func(args)
 
 
 if __name__ == "__main__":

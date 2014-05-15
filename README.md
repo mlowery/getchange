@@ -2,12 +2,11 @@
 
 ## Overview
 
-`getchange` will cherry-pick a Gerrit change along with its unmerged ancestors
-given only a "change-ish".
+`getchange` will download a Gerrit change along with its unmerged ancestors
+(i.e. dependencies) given only a "change-ish".
 
 A "change-ish" is any of the following:
 
-* Commit hash
 * Gerrit Change-Id
     * Either 41-character ID, or
     * "Change-Id: xyz" (Copy to Clipboard button in Gerrit)
@@ -20,15 +19,74 @@ The cherry-picks will occur on a new branch updated with the commits of the
 appropriate branch. Any changes will be stashed. Any branch with the same name
 will be renamed.
 
+
+`getchange` handles two use-cases:
+
+1. Edit
+2. Test/Review
+
+### Edit
+
+```
+getchange edit 123
+```
+
+`edit` will do the following:
+
+* performs checks \*
+* stashes any changes
+* creates a branch matching the original topic
+* fetches the latest revision of the parent change of the given change
+* cherry-picks the given change on top of latest parent change
+
+## Test
+
+```
+getchange test 123
+```
+
+`test` will do the following:
+
+* performs checks \*
+* stashes any changes
+* creates a branch based on the change subject and patch set
+* fetches the the latest from branch from which the change-chain originates
+* rebases the change-chain on top of latest from branch
+
+\* Checks to be added to `getchange`:
+
+* Confirm each change in change-chain is based on the latest available parent
+* Confirm entire change-chain has passed all tests
+
+## How is this different from git review -d or the Gerrit UI shortcuts?
+
+### git review -d
+
+* Original topic is preserved.
+* Eventually checks will be performed to prevent stale changes.
+* Rebasing on top of latest parent.
+
+### Gerrit UI Shortcuts
+
+*Checkout*: Doesn't use latest master. There's no reason to test against an old
+master.
+
+*Cherry-Pick*: Doesn't handle Gerrit changes with dependencies.
+
+*Format-Patch*: Doesn't handle Gerrit changes with dependencies.
+
+*Pull*: Creates a merge commit. Or, if rebase is configured when pulling, the
+commits of the change and its dependencies are not at the tip. You're not
+submitting this branch so it's OK but it's not intuitive to look at later to
+see what's in the branch.
+
+*Patch-File*: Doesn't handle Gerrit changes with dependencies.
+
+
+
 ## Installation
 
 1. Clone this repo
 1. Optionally, add the clone directory to your `PATH`.
-2. Add this block to your `~/.ssh/config`:
+1. Run `git review -s` in the repo with which you want to work.
 
-```
-Host review
-    HostName review.openstack.org
-    Port 29418
-    User <gerrit-username>
-```
