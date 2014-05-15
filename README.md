@@ -28,6 +28,7 @@ will be renamed.
 ### Edit
 
 ```
+cd $repodir
 getchange edit 123
 ```
 
@@ -42,6 +43,7 @@ getchange edit 123
 ## Test
 
 ```
+cd $repodir
 getchange test 123
 ```
 
@@ -58,7 +60,7 @@ getchange test 123
 * Confirm each change in change-chain is based on the latest available parent (excluding merged parent)
 * Confirm entire change-chain has passed all tests
 
-## How is this different from git review -d or the Gerrit UI shortcuts?
+## How is this different from git review -d or Gerrit UI shortcuts?
 
 ### git review -d
 
@@ -78,13 +80,12 @@ submitting this branch so it's OK but it's not intuitive to look at later to
 see what's in the branch.
 * *Patch-File*: Doesn't handle Gerrit changes with dependencies.
 
-## Usage
-
-Run `getchange` from a directory containing `.git`.
-
 ## Installation
 
 1. Clone this repo
 1. Optionally, add the clone directory to your `PATH`.
 1. Run `git review -s` in the repo with which you want to work.
 
+## Usage
+
+Run `getchange` from a directory containing `.git`.
