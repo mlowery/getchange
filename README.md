@@ -38,7 +38,7 @@ getchange edit 123
 * stashes any changes
 * creates a branch matching the original topic
 * fetches the latest revision of the parent change of the given change
-* cherry-picks the given change on top of latest parent change
+* cherry-picks the given change on top of latest parent change (which could be master or a dependency)
 
 ## Test
 
@@ -52,7 +52,7 @@ getchange test 123
 * performs checks \*
 * stashes any changes
 * creates a branch based on the change subject and patch set (saves trips to Gerrit to figure out what the change is)
-* fetches the the latest from branch from which the change-chain originates
+* fetches the latest from the branch from which the change-chain originates
 * rebases the change-chain on top of latest from branch
 
 \* Checks to be added to `getchange`:
@@ -65,7 +65,7 @@ getchange test 123
 ### git review -d
 
 * `git review -d` does not preserve the original topic.
-* `git review -d` does not rebasing on top of latest parent.
+* `git review -d` does not rebase on top of latest parent.
 * Eventually checks will be performed to prevent stale changes.
 
 ### Gerrit UI Shortcuts
