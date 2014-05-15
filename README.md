@@ -3,7 +3,8 @@
 ## Overview
 
 `getchange` will download a Gerrit change along with its unmerged ancestors
-(i.e. dependencies) given only a "change-ish".
+(i.e. dependencies) given only a "change-ish". A change along with its
+dependencies is referred to here as a "change-chain."
 
 A "change-ish" is any of the following:
 
@@ -15,10 +16,9 @@ A "change-ish" is any of the following:
     * https://review.openstack.org/#/c/123/
     * https://review.openstack.org/123
 
-The cherry-picks will occur on a new branch updated with the commits of the
+The rebase/cherry-pick will occur on a new branch updated with the commits of the
 appropriate branch. Any changes will be stashed. Any branch with the same name
 will be renamed.
-
 
 `getchange` handles two use-cases:
 
@@ -49,40 +49,38 @@ getchange test 123
 
 * performs checks \*
 * stashes any changes
-* creates a branch based on the change subject and patch set
+* creates a branch based on the change subject and patch set (saves trips to Gerrit to figure out what the change is)
 * fetches the the latest from branch from which the change-chain originates
 * rebases the change-chain on top of latest from branch
 
 \* Checks to be added to `getchange`:
 
-* Confirm each change in change-chain is based on the latest available parent
+* Confirm each change in change-chain is based on the latest available parent (excluding merged parent)
 * Confirm entire change-chain has passed all tests
 
 ## How is this different from git review -d or the Gerrit UI shortcuts?
 
 ### git review -d
 
-* Original topic is preserved.
+* `git review -d` does not preserve the original topic.
+* `git review -d` does not rebasing on top of latest parent.
 * Eventually checks will be performed to prevent stale changes.
-* Rebasing on top of latest parent.
 
 ### Gerrit UI Shortcuts
 
-*Checkout*: Doesn't use latest master. There's no reason to test against an old
+* *Checkout*: Doesn't use latest master. There's no reason to test against an old
 master.
-
-*Cherry-Pick*: Doesn't handle Gerrit changes with dependencies.
-
-*Format-Patch*: Doesn't handle Gerrit changes with dependencies.
-
-*Pull*: Creates a merge commit. Or, if rebase is configured when pulling, the
+* *Cherry-Pick*: Doesn't handle Gerrit changes with dependencies.
+* *Format-Patch*: Doesn't handle Gerrit changes with dependencies.
+* *Pull*: Creates a merge commit. Or, if rebase is configured when pulling, the
 commits of the change and its dependencies are not at the tip. You're not
 submitting this branch so it's OK but it's not intuitive to look at later to
 see what's in the branch.
+* *Patch-File*: Doesn't handle Gerrit changes with dependencies.
 
-*Patch-File*: Doesn't handle Gerrit changes with dependencies.
+## Usage
 
-
+Run `getchange` from a directory containing `.git`.
 
 ## Installation
 
