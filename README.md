@@ -25,7 +25,7 @@ will be renamed.
 1. Edit
 2. Test/Review
 
-### Edit
+## Edit
 
 ```
 cd $repodir
@@ -59,10 +59,6 @@ getchange test 123
 
 * Confirm each change in change-chain is based on the latest available parent (excluding merged parent)
 
-\* Checks to be added in the future:
-
-* Confirm entire change-chain has passed all tests
-
 ## How is this different from git review -d or Gerrit UI shortcuts?
 
 ### git review -d
@@ -73,7 +69,7 @@ getchange test 123
 ### Gerrit UI Shortcuts
 
 * *Checkout*: Doesn't use latest master. There's no reason to test against an old
-master.
+master or to test code that cannot rebase without conflicts.
 * *Cherry-Pick*: Doesn't handle Gerrit changes with dependencies.
 * *Format-Patch*: Doesn't handle Gerrit changes with dependencies.
 * *Pull*: Creates a merge commit. Or, if rebase is configured when pulling, the

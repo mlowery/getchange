@@ -150,6 +150,10 @@ def get_latest_revs(changes):
 
 
 def check_up_to_date(changes):
+    """
+    for each change revision in chain, check to see if it is up-to-date (i.e.
+    see if its parent has advanced)
+    """
     parent_commits = get_parent_commits(changes)
     latest_revs = get_latest_revs(changes)
 
@@ -273,25 +277,8 @@ def backup_branch(branch):
 
 
 def perform_checks(changes):
-    """
-    for each change revision in chain, check to see if it is up-to-date (i.e.
-    see if its parent have advanced)
-    issue warnings for each mismatch
-    1. get latest on branch
-    2. check first change in dep chain
-    3.
-    """
     check_up_to_date(changes)
-    # TODO check Jenkins and reddwarf passed on all dependencies
-
-    # TODO move these checks into pre-action hook for git-review
-    #check branch (topic naming convention)
-    #check for Implements or Closes-Bug
-    #check for submit on old dependency
-    #check for submit on old master (does git review prevent this?)
-    #runs pep8
-    #colored output
-    pass
+    # TODO confirm check jobs passed on all dependencies
 
 
 def main():
