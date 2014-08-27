@@ -161,8 +161,18 @@ def check_up_to_date(changes):
     parent_commits = parent_commits[1:]
     latest_revs = latest_revs[1:]
 
+    if len(parent_commits) > 0:
+        # throw out direct parent since we're rebasing on latest anyway
+        parent_commits = parent_commits[:-1]
+        latest_revs = latest_revs[:-1]
+
+    # logging.debug('parent_commits: %s, latest_revs: %s' % (parent_commits,
+    #                                                        latest_revs))
+
     if not parent_commits == latest_revs:
-        msg = 'One or more changes is not rebased on its latest parent'
+        msg = ('One or more changes is not rebased on its latest parent; '
+               'expected latest commits: %s; actual commits: %s' %
+               (latest_revs, parent_commits))
         logging.warning(msg)
 
 
