@@ -55,9 +55,12 @@ getchange test 123
 * fetches the latest from the branch from which the change-chain originates
 * rebases the change-chain on top of latest from branch
 
-\* Checks to be added to `getchange`:
+\* Checks performed:
 
 * Confirm each change in change-chain is based on the latest available parent (excluding merged parent)
+
+\* Checks to be added in the future:
+
 * Confirm entire change-chain has passed all tests
 
 ## How is this different from git review -d or Gerrit UI shortcuts?
@@ -65,8 +68,7 @@ getchange test 123
 ### git review -d
 
 * `git review -d` does not preserve the original topic.
-* `git review -d` does not rebase on top of latest parent.
-* Eventually checks will be performed to prevent stale changes.
+* `git review -d` does not rebase on top of the latest parent.
 
 ### Gerrit UI Shortcuts
 
