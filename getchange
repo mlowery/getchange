@@ -215,6 +215,11 @@ def check_call(cmd, quiet=True):
 def reset():
     assert_git_repo()
     check_call('git stash save --all stash_by_%s' % os.path.basename(__file__))
+    try:
+        check_call('git merge --abort')
+        check_call('git rebase --abort')
+    except subprocess.CalledProcessError:
+        pass
 
 
 def assert_git_repo():
@@ -250,7 +255,7 @@ def edit(args):
     get_changes(changeish, changes)
     change = changes[-1]
     perform_checks(changes)
-    parent_is_merged = len(changes) == 1
+    parent_is_merged = len(changes) == 2
     reset()
     ref = change['currentPatchSet']['ref']
     branch = change['topic']
