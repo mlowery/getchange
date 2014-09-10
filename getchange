@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 __author__ = 'mlowery'
 
@@ -258,7 +258,14 @@ def edit(args):
     parent_is_merged = len(changes) == 2
     reset()
     ref = change['currentPatchSet']['ref']
-    branch = change['topic']
+    if 'topic' in change:
+        branch = change['topic']
+    else:
+        logging.warning('No topic found.')
+        branch = '%s_%s/%s' % (re.sub('\W+', '_',
+                               change['subject'][:40].strip()).lower(),
+                               change['number'],
+                               change['currentPatchSet']['number'])
     backup_branch(branch)
     if parent_is_merged:
         parent_ref = change['branch']
